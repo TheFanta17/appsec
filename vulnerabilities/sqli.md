@@ -104,6 +104,8 @@ login=admin%20%20%20%20%20%20%201&password=monpass
 
 ## UNION attacks
 
+> Contexte string literal supposé (`'...--`). Adapter selon Recon 1 : numérique → retirer les quotes ; ORDER BY → UNION impossible, basculer error-based ou blind.
+
 ### Déterminer le nombre de colonnes
 
 Incrémenter jusqu'à l'erreur, ou ajouter des `NULL` jusqu'à ce que la requête passe.
@@ -151,6 +153,8 @@ Lister les tables puis les colonnes via `information_schema`. `SELECT *` ne marc
 ```
 
 ## Blind SQL
+
+> Contexte string literal supposé. Adapter selon Recon 1 : numérique → sans quotes ; ORDER BY → injecter la condition après `ASC` via `,(CASE WHEN (cond) THEN 1 ELSE 1/0 END)` (vrai = OK, faux = erreur division).
 
 ### Exploiter une réponse conditionnelle
 
