@@ -33,6 +33,21 @@ Commenter la vérification du mot de passe pour se connecter sans lui.
 administrator'--
 ```
 
+## SQL Truncation
+
+Vuln de stockage, pas d'injection (zéro métacaractère). MySQL non-strict tronque `VARCHAR(n)` en silence, et `=` complète avec des espaces. On duplique un compte existant (`admin`) avec son propre mot de passe.
+
+Repérer : `login VARCHAR(n)` court, form register + contrôle d'unicité.
+
+Pour `VARCHAR(12)` + cible `admin` :
+
+```text
+login=admin%20%20%20%20%20%20%201&password=monpass
+```
+
+`admin` + 7 espaces + `1` = 13 car. → passe l'unicité → tronqué à 12 (`admin` + 7 espaces) → `= 'admin'` par padding. Le `1` force le dépassement et survit au trim. **Pas de quotes.** Puis login `admin` / `monpass`.
+
+
 ## UNION attacks
 
 ### Déterminer le nombre de colonnes
