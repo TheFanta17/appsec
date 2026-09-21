@@ -223,5 +223,3 @@ Message générique côté front (bloque l'error-based), exception réelle logg�
 Front   : "Une erreur est survenue"
 Serveur : log complet de l'exception SQL
 ```
-
-e
